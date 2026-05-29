@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ベビーカステラ 会計システム</title>
+</head>
+<body>
+  <h1>ベビーカステラ 会計システム</h1>
+
+  <div>
+    <span>プレーン ¥300</span>
+    <button onclick="minusPlain()">−</button>
+    <span id="plain-count">0</span>
+    <button onclick="plusPlain()">+</button>
+  </div>
+
+  <div>
+    <span>抹茶 ¥300</span>
+    <button onclick="minusMatcha()">−</button>
+    <span id="matcha-count">0</span>
+    <button onclick="plusMatcha()">+</button>
+  </div>
+
+  <div>
+    <span>チョコ ¥350</span>
+    <button onclick="minusChoco()">-</button>
+    <span id="choco-count">0</span>
+    <button onclick="plusChoco()">+</button>
+  </div>
+
+  <p>合計: ¥<span id="total">0</span></p>
+
+  <button onclick="register()">登録する</button>
+
+  <h2>集計</h2>
+  <p>売上合計: ¥<span id="total-revenue">0</span></p>
+  <p>プレーン: <span id="plain-total-count">0</span>個 ¥<span id="plain-total-revenue">0</span></p>
+  <p>抹茶: <span id="matcha-total-count">0</span>個 ¥<span id="matcha-total-revenue">0</span></p>
+  <p>チョコ: <span id="choco-total-count">0</span>個 ¥<span id="choco-total-revenue">0</span></p>
+  <h2>時間別売上</h2>
+  <div id="hourly-sales"></div>
+
+  <h2>取引履歴</h2>
+  <div id="log"></div>
+
+  <script>
+    const API_URL = 'https://gosqxbnhj6.execute-api.ap-northeast-1.amazonaws.com/register'
+    const GET_API_URL = 'https://gosqxbnhj6.execute-api.ap-northeast-1.amazonaws.com/sales'
+    const DELETE_API_URL = 'https://gosqxbnhj6.execute-api.ap-northeast-1.amazonaws.com/delete'
+
+    let hourlySales = {}
+    let totalRevenue = 0
+    let plainTotalCount = 0
+    let plainTotalRevenue = 0
+    let matchaTotalCount = 0
+    let matchaTotalRevenue = 0
+    let chocoTotalCount = 0
+    let chocoTotalRevenue = 0
+
+    let plainCount = 0
+    let matchaCount = 0
+    let chocoCount = 0
+
+    function updateTotal() {
+      let total = (plainCount * 300) + (matchaCount * 300) + (chocoCount * 350)
+      document.getElementById('total').innerText = total
+    }
+
+    function plusPlain() {
+      plainCount = plainCount + 1
+      document.getElementById('plain-count').innerText = plainCount
+      updateTotal()
+    }
+
+    function minusPlain() {
+      if (plainCount > 0) {
+        plainCount = plainCount - 1
+        document.getElementById('plain-count').innerText = plainCount
+        updateTotal()
+      }
+    }
+
+    function plusMatcha() {
+      matchaCount = matchaCount + 1
+      document.getElementById('matcha-count').innerText = matchaCount
+      updateTotal()
+    }
+
+    function minusMatcha() {
+      if (matchaCount > 0) {
+        matchaCount = matchaCount - 1
+        document.getElementById('matcha-count').innerText = matchaCount
+        updateTotal()
+      }
+    }
+
+    function plusChoco() {
+      chocoCount = chocoCount + 1
+      document.getElementById('choco-count').innerText = chocoCount
+      updateTotal()
+    }
+
+    function minusChoco() {
+      if (chocoCount > 0) {
+        chocoCount = chocoCount - 1
+        document.getElementById('choco-count').innerText = chocoCount
+        updateTotal()
+      }
+    }
+
+    function updateDisplay() {
+      document.getElementById('total-revenue').innerText = totalRevenue
+      document.getElementById('plain-total-count').innerText = plainTotalCount
+      document.getElementById('plain-total-revenue').innerText = plainTotalRevenue
+      document.getElementById('matcha-total-count').innerText = matchaTotalCount
+      document.getElementById('matcha-total-revenue').innerText = matchaTotalRevenue
+      document.getElementById('choco-total-count').innerText = chocoTotalCount
+      document.getElementById('choco-total-revenue').innerText = chocoTotalRevenue
+
+      let hourlySalesDiv = document.getElementById('hourly-sales')
+      hourlySalesDiv.innerHTML = ''
+      for (let h in hourlySales) {
+        let p = document.createElement('p')
+        p.innerText = h + ': ' + hourlySales[h] + '個'
+        hourlySalesDiv.appendChild(p)
+      }
+    }
+
+    async function register() {
+      if (plainCount === 0 && matchaCount === 0 && chocoCount === 0) {
+        alert('数量を選んでください')
+        return
+      }
+
+      let total = (plainCount * 300) + (matchaCount * 300) + (chocoCount * 350)
+      let now = new Date()
+      let time = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0')
+      let hour = now.getHours() + '時'
+
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plain: plainCount,
+          matcha: matchaCount,
+          choco: chocoCount,
+          total: total
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+
+        totalRevenue += total
+        plainTotalCount += plainCount
+        plainTotalRevenue += plainCount * 300
+        matchaTotalCount += matchaCount
+        matchaTotalRevenue += matchaCount * 300
+        chocoTotalCount += chocoCount
+        chocoTotalRevenue += chocoCount * 350
+
+        if (hourlySales[hour] === undefined) hourlySales[hour] = 0
+        hourlySales[hour] += plainCount + matchaCount + chocoCount
+
+        let log = document.getElementById('log')
+        let row = document.createElement('div')
+        row.setAttribute('data-id', data.id)
+        row.setAttribute('data-plain', plainCount)
+        row.setAttribute('data-matcha', matchaCount)
+        row.setAttribute('data-choco', chocoCount)
+        row.setAttribute('data-total', total)
+        row.setAttribute('data-hour', hour)
+
+        let text = time + '　'
+        if (plainCount > 0) text += 'プレーン×' + plainCount + '　'
+        if (matchaCount > 0) text += '抹茶×' + matchaCount + '　'
+        if (chocoCount > 0) text += 'チョコ×' + chocoCount + '　'
+        text += '¥' + total
+
+        let textSpan = document.createElement('span')
+        textSpan.innerText = text
+
+        let deleteBtn = document.createElement('button')
+        deleteBtn.innerText = '削除'
+        deleteBtn.onclick = function() { deleteEntry(row) }
+
+        row.appendChild(textSpan)
+        row.appendChild(deleteBtn)
+        log.prepend(row)
+
+        updateDisplay()
+
+        plainCount = 0
+        matchaCount = 0
+        chocoCount = 0
+        document.getElementById('plain-count').innerText = 0
+        document.getElementById('matcha-count').innerText = 0
+        document.getElementById('choco-count').innerText = 0
+        updateTotal()
+      } else {
+        alert('登録に失敗しました')
+      }
+    }
+
+    async function deleteEntry(row) {
+      let id = row.getAttribute('data-id')
+      let p = parseInt(row.getAttribute('data-plain'))
+      let m = parseInt(row.getAttribute('data-matcha'))
+      let c = parseInt(row.getAttribute('data-choco'))
+      let t = parseInt(row.getAttribute('data-total'))
+      let hour = row.getAttribute('data-hour')
+
+      await fetch(DELETE_API_URL, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id })
+      })
+
+      totalRevenue -= t
+      plainTotalCount -= p
+      plainTotalRevenue -= p * 300
+      matchaTotalCount -= m
+      matchaTotalRevenue -= m * 300
+      chocoTotalCount -= c
+      chocoTotalRevenue -= c * 350
+
+      if (hourlySales[hour] !== undefined) {
+        hourlySales[hour] -= p + m + c
+      }
+
+      updateDisplay()
+      row.remove()
+    }
+
+    async function loadSales() {
+      const response = await fetch(GET_API_URL)
+      const items = await response.json()
+
+      items.forEach(function(item) {
+        totalRevenue += parseInt(item.total)
+        plainTotalCount += parseInt(item.plain)
+        plainTotalRevenue += parseInt(item.plain) * 300
+        matchaTotalCount += parseInt(item.matcha)
+        matchaTotalRevenue += parseInt(item.matcha) * 300
+        chocoTotalCount += parseInt(item.choco)
+        chocoTotalRevenue += parseInt(item.choco) * 350
+
+        let hour = item.time.split(':')[0] + '時'
+        if (hourlySales[hour] === undefined) hourlySales[hour] = 0
+        hourlySales[hour] += parseInt(item.plain) + parseInt(item.matcha) + parseInt(item.choco)
+
+        let log = document.getElementById('log')
+        let row = document.createElement('div')
+        row.setAttribute('data-id', item.id)
+        row.setAttribute('data-plain', item.plain)
+        row.setAttribute('data-matcha', item.matcha)
+        row.setAttribute('data-choco', item.choco)
+        row.setAttribute('data-total', item.total)
+        row.setAttribute('data-hour', item.time.split(':')[0] + '時')
+
+        let text = item.time + '　'
+        if (parseInt(item.plain) > 0) text += 'プレーン×' + item.plain + '　'
+        if (parseInt(item.matcha) > 0) text += '抹茶×' + item.matcha + '　'
+        if (parseInt(item.choco) > 0) text += 'チョコ×' + item.choco + '　'
+        text += '¥' + item.total
+
+        let textSpan = document.createElement('span')
+        textSpan.innerText = text
+
+        let deleteBtn = document.createElement('button')
+        deleteBtn.innerText = '削除'
+        deleteBtn.onclick = function() { deleteEntry(row) }
+
+        row.appendChild(textSpan)
+        row.appendChild(deleteBtn)
+        log.appendChild(row)
+      })
+
+      updateDisplay()
+    }
+
+    loadSales()
+
+  </script>
+</body>
+</html>
